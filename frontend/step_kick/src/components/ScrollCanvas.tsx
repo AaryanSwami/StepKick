@@ -1,12 +1,12 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // 🎛  CONFIGURATION — change anything here
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-/** Total number of JPG frames in /public/frames/ */
+/** Total number of JPG frames in /public/frames3/ */
 const FRAME_COUNT = 285;
 
 /**
@@ -19,12 +19,7 @@ const SCROLL_HEIGHT = "500vh";
 
 /**
  * Filename pattern for your frames.
- * Current: ezgif-frame-001.jpg … ezgif-frame-020.jpg
- *
- * Examples to swap:
- *   `/frames/frame-${String(i).padStart(3,"0")}.jpg`   → frame-001.jpg
- *   `/frames/shoe_${String(i).padStart(2,"0")}.jpg`    → shoe_01.jpg
- *   `/frames/img${i}.jpg`                              → img1.jpg
+ * Current: ezgif-frame-001.jpg … ezgif-frame-285.jpg
  */
 const FRAME_PATH = (i: number) =>
   `/frames3/ezgif-frame-${String(i).padStart(3, "0")}.jpg`;
@@ -36,6 +31,11 @@ export default function ScrollCanvas() {
   const containerRef = useRef<HTMLDivElement>(null);
   const images = useRef<HTMLImageElement[]>([]);
   const currentFrame = useRef(0);
+
+  // Loading Overlay states
+  const [isLoading, setIsLoading] = useState(true);
+  const [loadProgress, setLoadProgress] = useState(0);
+  const [isOverlayMounted, setIsOverlayMounted] = useState(true);
 
   /* ── draw a specific frame index ── */
   const drawFrame = (index: number) => {
@@ -64,18 +64,56 @@ export default function ScrollCanvas() {
   /* ── preload all frames ── */
   useEffect(() => {
     const imgs: HTMLImageElement[] = [];
-    let loaded = 0;
+    let loadedCount = 0;
+
+    // Prevent scrolling during preload
+    document.body.style.overflow = "hidden";
 
     for (let i = 1; i <= FRAME_COUNT; i++) {
       const img = new Image();
       img.src = FRAME_PATH(i);
+      
       img.onload = () => {
-        loaded++;
-        if (loaded === 1) drawFrame(0); // paint first frame immediately
+        loadedCount++;
+        const percent = Math.round((loadedCount / FRAME_COUNT) * 100);
+        setLoadProgress(percent);
+
+        if (loadedCount === 1) {
+          drawFrame(0); // paint first frame immediately
+        }
+
+        if (loadedCount === FRAME_COUNT) {
+          setIsLoading(false);
+          document.body.style.overflow = ""; // enable scrolling
+          setTimeout(() => {
+            setIsOverlayMounted(false);
+          }, 800); // wait for fade transition
+        }
       };
+
+      img.onerror = () => {
+        // Fallback for errors to prevent blocking the site forever
+        loadedCount++;
+        const percent = Math.round((loadedCount / FRAME_COUNT) * 100);
+        setLoadProgress(percent);
+
+        if (loadedCount === FRAME_COUNT) {
+          setIsLoading(false);
+          document.body.style.overflow = "";
+          setTimeout(() => {
+            setIsOverlayMounted(false);
+          }, 800);
+        }
+      };
+
       imgs.push(img);
     }
     images.current = imgs;
+
+    // Cleanup: restore scroll if the component unmounts early
+    return () => {
+      document.body.style.overflow = "";
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -104,7 +142,7 @@ export default function ScrollCanvas() {
 
     window.addEventListener("scroll", handleScroll, { passive: true });
     return () => window.removeEventListener("scroll", handleScroll);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   /* ── resize canvas when window changes ── */
@@ -119,20 +157,67 @@ export default function ScrollCanvas() {
     });
     ro.observe(canvas);
     return () => ro.disconnect();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   return (
     <div ref={containerRef} style={{ height: SCROLL_HEIGHT }} className="relative">
+      
+      {/* 🎬 Premium Experience Preloader */}
+      {isOverlayMounted && (
+        <div 
+          className={`fixed inset-0 z-50 flex flex-col items-center justify-center bg-[#0d0d0d] text-white transition-opacity duration-700 ease-in-out ${
+            isLoading ? "opacity-100" : "opacity-0 pointer-events-none"
+          }`}
+        >
+          <div className="flex flex-col items-center space-y-6 max-w-xs w-full px-4 text-center">
+            {/* Luxury Serif Title */}
+            <h1 className="font-serif text-3xl tracking-wider font-light italic">
+              Stepkick
+            </h1>
+            
+            {/* Elegant Circular Progress SVG */}
+            <div className="relative flex items-center justify-center w-20 h-20">
+              <svg className="w-full h-full transform -rotate-90">
+                <circle
+                  cx="40"
+                  cy="40"
+                  r="34"
+                  stroke="rgba(255, 255, 255, 0.08)"
+                  strokeWidth="2.5"
+                  fill="transparent"
+                />
+                <circle
+                  cx="40"
+                  cy="40"
+                  r="34"
+                  stroke="white"
+                  strokeWidth="2.5"
+                  fill="transparent"
+                  strokeDasharray={213.6}
+                  strokeDashoffset={213.6 - (213.6 * loadProgress) / 100}
+                  className="transition-all duration-200 ease-out"
+                />
+              </svg>
+              <span className="absolute text-sm font-sans font-medium tracking-tight">
+                {loadProgress}%
+              </span>
+            </div>
+
+            {/* Status indicators */}
+            <div className="space-y-1">
+              <p className="text-[10px] tracking-[0.25em] uppercase text-white/50">
+                Preloading Experience
+              </p>
+              <p className="text-xs text-white/70 font-light">
+                Assembling shoe craft animation...
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="sticky top-0 h-screen w-full overflow-hidden">
-
-        {/* "Scroll to explore" hint — uncomment to show */}
-        {/* <div className="absolute inset-0 flex flex-col items-center justify-end pb-16 z-10 pointer-events-none">
-          <p className="text-xs tracking-widest uppercase opacity-50 text-foreground">
-            Scroll to explore
-          </p>
-        </div> */}
-
         <canvas
           ref={canvasRef}
           className="h-full w-full"
